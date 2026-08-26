@@ -1,6 +1,12 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { cn, confidenceLabel, pct } from '../../lib/utils'
-import type { IdentityState, VerificationStatus, FactOrigin } from '../../types'
+import type {
+  IdentityState,
+  SubjectAuthorization,
+  VerificationStatus,
+  FactOrigin,
+} from '../../types'
+import { AtlasServiceError } from '../../services/errors'
 
 /* ---------- Button ---------- */
 
@@ -211,3 +217,57 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
     </div>
   )
 }
+
+/* ---------- Authorization state badge ---------- */
+
+export function AuthorizationBadge({
+  state,
+  className,
+}: {
+  state: SubjectAuthorization
+  className?: string
+}) {
+  const config: Record<
+    SubjectAuthorization,
+    { label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' }
+  > = {
+    authorized: { label: 'Authorized', tone: 'ok' },
+    restricted: { label: 'Restricted', tone: 'warn' },
+    revoked: { label: 'Revoked', tone: 'danger' },
+    undeclared: { label: 'Undeclared', tone: 'neutral' },
+  }
+  const { label, tone } = config[state]
+  return (
+    <Pill tone={tone} className={className}>
+      {label}
+    </Pill>
+  )
+}
+
+/* ---------- Typed error panel ---------- */
+
+/**
+ * Renders service failures honestly. `provider_not_configured` always
+ * surfaces as "Provider not configured." — the system never falls back to
+ * demo content when a real provider is missing.
+ */
+export function ErrorPanel({ error }: { error: AtlasServiceError }) {
+  const isAuthz = error.code === 'authorization_required'
+  return (
+    <Panel className={cn('p-4', isAuthz ? 'border-warn/30 bg-warn-muted' : 'border-danger/30 bg-danger-muted')}>
+      <p className={cn('text-[13px] font-medium', isAuthz ? 'text-warn' : 'text-danger')}>
+        {error.displayMessage}
+      </p>
+      {isAuthz && (
+        <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
+          Identity resolution and research are blocked until this subject has an
+          explicit authorization record.
+        </p>
+      )}
+      {error.code === 'provider_failure' && (
+        <p className="mt-1 text-xs text-ink-muted">The provider did not return a valid response.</p>
+      )}
+    </Panel>
+  )
+}
+

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, FolderOpen, Plug, Search, ShieldCheck, User } from 'lucide-react'
-import { collections, evidence, investigations, profiles, sources } from '../data/seed'
+import { FileText, Plug, Search, ShieldCheck, User, type LucideIcon } from 'lucide-react'
+import { useSearchIndex } from '../api/hooks'
+import type { SearchEntry } from '../api/hooks'
 import { cn } from '../lib/utils'
 
 interface PaletteItem {
@@ -9,53 +10,15 @@ interface PaletteItem {
   group: string
   label: string
   sublabel: string
-  icon: typeof Search
+  icon: LucideIcon
   to: string
 }
 
-function buildIndex(): PaletteItem[] {
-  return [
-    ...investigations.map((inv) => ({
-      id: inv.id,
-      group: 'Investigations',
-      label: inv.title,
-      sublabel: `${inv.status.replace('_', ' ')} · ${inv.riskLevel} risk`,
-      icon: ShieldCheck,
-      to: `/investigations/${inv.id}`,
-    })),
-    ...profiles.map((p) => ({
-      id: p.id,
-      group: 'People',
-      label: p.canonicalName,
-      sublabel: p.identityState,
-      icon: User,
-      to: `/people/${p.id}`,
-    })),
-    ...sources.map((s) => ({
-      id: s.id,
-      group: 'Sources',
-      label: s.sourceName,
-      sublabel: s.provider,
-      icon: Plug,
-      to: '/sources',
-    })),
-    ...evidence.map((e) => ({
-      id: e.id,
-      group: 'Evidence',
-      label: e.claim,
-      sublabel: e.evidenceType.replace('_', ' '),
-      icon: FileText,
-      to: `/investigations/${e.investigationId}`,
-    })),
-    ...collections.map((c) => ({
-      id: c.id,
-      group: 'Collections',
-      label: c.name,
-      sublabel: `${c.itemCount} items`,
-      icon: FolderOpen,
-      to: '/collections',
-    })),
-  ]
+const typeIcon: Record<SearchEntry['type'], LucideIcon> = {
+  Investigation: ShieldCheck,
+  Person: User,
+  Source: Plug,
+  Evidence: FileText,
 }
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -63,7 +26,20 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
-  const index = useMemo(() => buildIndex(), [])
+  const indexQuery = useSearchIndex(open)
+
+  const index = useMemo<PaletteItem[]>(
+    () =>
+      (indexQuery.data ?? []).map((entry) => ({
+        id: entry.id,
+        group: entry.type,
+        label: entry.title,
+        sublabel: entry.detail,
+        icon: typeIcon[entry.type],
+        to: entry.to,
+      })),
+    [indexQuery.data],
+  )
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -126,14 +102,24 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           </kbd>
         </div>
         <div className="max-h-80 overflow-y-auto p-1.5">
-          {results.length === 0 && (
-            <p className="px-3 py-8 text-center text-xs text-ink-muted">No results for “{query}”.</p>
+          {indexQuery.error !== null && (
+            <p className="px-3 py-6 text-center text-xs text-warn">
+              {indexQuery.error.displayMessage}
+            </p>
+          )}
+          {indexQuery.error === null && indexQuery.loading && (
+            <p className="px-3 py-6 text-center text-xs text-ink-muted">Building search index…</p>
+          )}
+          {indexQuery.error === null && !indexQuery.loading && results.length === 0 && (
+            <p className="px-3 py-8 text-center text-xs text-ink-muted">
+              No results for “{query}”.
+            </p>
           )}
           {results.map((item, i) => {
             const showGroup = i === 0 || item.group !== results[i - 1].group
             const Icon = item.icon
             return (
-              <div key={item.id}>
+              <div key={`${item.group}-${item.id}`}>
                 {showGroup && (
                   <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
                     {item.group}

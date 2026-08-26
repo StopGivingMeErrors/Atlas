@@ -33,20 +33,35 @@ export interface Investigation {
   updatedAt: string
 }
 
-export type ConsentStatus = 'consented' | 'org_authorized' | 'legal_basis' | 'pending_review'
+/**
+ * CRITICAL PRIVACY MODEL — every subject carries an explicit authorization
+ * state. Identity resolution may only run when the state is `authorized`;
+ * the service layer, database RLS, and triggers all enforce this.
+ */
+export type SubjectAuthorization = 'undeclared' | 'authorized' | 'restricted' | 'revoked'
+
 export type IdentityState = 'confirmed' | 'probable' | 'candidate' | 'unresolved'
 
 export interface InvestigationSubject {
   id: string
   investigationId: string
   label: string
-  consentStatus: ConsentStatus
+  authorizationState: SubjectAuthorization
   authorizationBasis: string
   identityState: IdentityState
   profileId: string | null
   evidenceCount: number
   lastActivityAt: string
   createdAt: string
+}
+
+export interface IdentityConfirmation {
+  id: string
+  candidateId: string
+  decision: 'confirmed' | 'rejected'
+  decidedBy: string
+  decidedAt: string
+  notes: string | null
 }
 
 export interface BoundingBox {
@@ -65,6 +80,16 @@ export interface DetectedFace {
   frameTimestamp: number
 }
 
+/** A detected face with tracking metadata and lifecycle state. */
+export interface TrackedFace extends DetectedFace {
+  trackId: number
+  state: 'ACTIVE' | 'TEMPORARILY_LOST' | 'EXPIRED'
+  firstSeenAt: number
+  lastSeenAt: number
+  framesSinceDetection: number
+  consecutiveFramesDetected: number
+}
+
 export type MatchStatus = 'pending' | 'confirmed' | 'rejected'
 
 export interface IdentityCandidate {
@@ -74,10 +99,33 @@ export interface IdentityCandidate {
   externalReference: string
   displayName: string
   matchConfidence: number
+  /** Provider assertion only — never a confirmed identity on its own. */
   matchStatus: MatchStatus
   signals: string[]
+  /** Matching provenance: what produced the query this candidate came from. */
+  mediaAssetId?: string | null
+  detectedFaceId?: string | null
+  trackRef?: string | null
+  matchedAt?: string | null
+  /** The upstream provider's own identifier for this candidate. */
+  providerCandidateId?: string | null
+  /** Durable search_runs correlation for the matching attempt. */
+  searchRunId?: string | null
+  /** SHA-256 over the canonical JSON of the raw provider candidate. */
+  rawFingerprint?: string | null
   createdAt: string
 }
+
+/** Search-run lifecycle. Terminal states are terminal. */
+export type SearchRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'no_results'
+
+export type SearchFailureReason =
+  | 'timeout'
+  | 'rate_limited'
+  | 'auth_failed'
+  | 'provider_error'
+  | 'invalid_response'
+  | 'network'
 
 export type FactCategory =
   | 'employment'
@@ -106,6 +154,12 @@ export interface IntelligenceFact {
   sourceIds: string[]
   firstObservedAt: string
   lastVerifiedAt: string
+  /** Provider-native result identifier — provenance pointer, not an FK. */
+  providerResultId?: string | null
+  /** The provider's claimed score, verbatim, or null when it gave none. */
+  providerConfidence?: number | null
+  /** Durable search_runs correlation for the ingestion run. */
+  searchRunId?: string | null
 }
 
 export interface IntelligenceProfile {
@@ -121,7 +175,13 @@ export interface IntelligenceProfile {
   updatedAt: string
 }
 
-export type SourceType = 'web_search' | 'professional_profile' | 'news' | 'org_registry' | 'public_website' | 'org_dataset'
+export type SourceType =
+  | 'web_search'
+  | 'professional_profile'
+  | 'news'
+  | 'org_registry'
+  | 'public_website'
+  | 'org_dataset'
 
 export interface Source {
   id: string
@@ -132,12 +192,18 @@ export interface Source {
   sourceType: SourceType
   credibilityScore: number
   retrievedAt: string
+  /** Provenance fields */
+  searchRunId?: string | null
+  contentHash?: string | null
+  publishedAt?: string | null
+  originalUrl?: string | null
+  status: 'active' | 'invalidated' | 'revoked'
 }
 
 export interface EvidenceItem {
   id: string
   investigationId: string
-  subjectId: string
+  subjectId: string | null
   sourceId: string
   factId: string | null
   claim: string
@@ -176,15 +242,17 @@ export interface NetworkEdge {
   evidenceIds: string[]
 }
 
-export interface ActivityEvent {
+/** Durable audit event as stored in audit_events (server-side). */
+export interface AuditEvent {
   id: string
   organizationId: string
   actor: string
   action: string
   detail: string
   resourceType: string
-  timestamp: string
+  resourceId: string | null
   sensitive: boolean
+  timestamp: string
 }
 
 export type ConnectorStatus = 'connected' | 'degraded' | 'not_configured' | 'paused'
@@ -198,12 +266,4 @@ export interface Connector {
   rateLimit: string
   authorizationStatus: 'authorized' | 'pending' | 'expired'
   description: string
-}
-
-export interface Collection {
-  id: string
-  name: string
-  description: string
-  itemCount: number
-  updatedAt: string
 }

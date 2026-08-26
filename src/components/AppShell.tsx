@@ -5,7 +5,6 @@ import {
   Camera,
   ChevronsUpDown,
   Command,
-  FolderOpen,
   Hexagon,
   LogOut,
   PanelLeftClose,
@@ -27,7 +26,6 @@ const navItems = [
   { to: '/people', label: 'People', icon: Users },
   { to: '/sources', label: 'Sources', icon: Plug },
   { to: '/search', label: 'Search', icon: Search },
-  { to: '/collections', label: 'Collections', icon: FolderOpen },
   { to: '/activity', label: 'Activity', icon: Activity },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

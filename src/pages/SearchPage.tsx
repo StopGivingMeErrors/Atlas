@@ -1,63 +1,21 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search } from 'lucide-react'
-import { collections, evidence, investigations, profiles, sources } from '../data/seed'
+import { useSearchIndex } from '../api/hooks'
 import { PageHeader } from '../components/PageHeader'
-import { EmptyState, Panel, PanelHeader, Pill } from '../components/ui/primitives'
-
-interface SearchResult {
-  id: string
-  type: string
-  title: string
-  detail: string
-  to: string
-}
+import { EmptyState, ErrorPanel, Panel, PanelHeader, Pill } from '../components/ui/primitives'
 
 export function SearchPage() {
   const [query, setQuery] = useState('')
+  const indexQuery = useSearchIndex(true)
 
-  const results = useMemo<SearchResult[]>(() => {
+  const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
-    const all: SearchResult[] = [
-      ...investigations.map((inv) => ({
-        id: inv.id,
-        type: 'Investigation',
-        title: inv.title,
-        detail: inv.description,
-        to: `/investigations/${inv.id}`,
-      })),
-      ...profiles.map((p) => ({
-        id: p.id,
-        type: 'Person',
-        title: p.canonicalName,
-        detail: p.summary,
-        to: `/people/${p.id}`,
-      })),
-      ...sources.map((s) => ({
-        id: s.id,
-        type: 'Source',
-        title: s.sourceName,
-        detail: s.provider,
-        to: '/sources',
-      })),
-      ...evidence.map((e) => ({
-        id: e.id,
-        type: 'Evidence',
-        title: e.claim,
-        detail: e.evidenceType.replace('_', ' '),
-        to: `/investigations/${e.investigationId}`,
-      })),
-      ...collections.map((c) => ({
-        id: c.id,
-        type: 'Collection',
-        title: c.name,
-        detail: c.description,
-        to: '/collections',
-      })),
-    ]
-    return all.filter((r) => `${r.title} ${r.detail} ${r.type}`.toLowerCase().includes(q))
-  }, [query])
+    return (indexQuery.data ?? [])
+      .filter((item) => `${item.title} ${item.detail} ${item.type}`.toLowerCase().includes(q))
+      .slice(0, 25)
+  }, [query, indexQuery.data])
 
   return (
     <div>
@@ -69,7 +27,7 @@ export function SearchPage() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search investigations, people, sources, evidence, collections…"
+            placeholder="Search investigations, people, sources, evidence…"
             className="h-11 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
           />
           <kbd className="rounded border border-edge bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-muted">
@@ -77,18 +35,22 @@ export function SearchPage() {
           </kbd>
         </div>
 
+        {indexQuery.error !== null && <ErrorPanel error={indexQuery.error} />}
+
         {query.trim() === '' ? (
           <EmptyState
             icon={<Search size={18} />}
             title="Search your workspace"
-            description="Find investigations, people, sources, evidence, and collections. Tip: press ⌘K anywhere for the command palette."
+            description="Find investigations, people, sources, and evidence. Tip: press ⌘K anywhere for the command palette."
           />
         ) : results.length === 0 ? (
-          <EmptyState
-            icon={<Search size={18} />}
-            title={`No results for “${query}”`}
-            description="Try different keywords, or check the spelling."
-          />
+          !indexQuery.loading && (
+            <EmptyState
+              icon={<Search size={18} />}
+              title={`No results for “${query}”`}
+              description="Try different keywords, or check the spelling."
+            />
+          )
         ) : (
           <Panel>
             <PanelHeader title={`${results.length} results`} />

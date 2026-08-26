@@ -1,69 +1,107 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import type { Organization, UserProfile } from '../types'
-import { currentUser, organizations } from '../data/seed'
+import type { SessionInfo } from '../services/auth'
+import { useAtlas } from '../api/hooks'
 
 /**
- * Auth service boundary. The demo implementation persists a session in
- * localStorage; a production build swaps this for Supabase Auth (or another
- * backend) behind the same context shape — components are unaffected.
+ * Session context backed exclusively by the AuthService boundary.
+ * There is no local credential handling here — all authentication runs
+ * through the configured provider (Supabase Auth in production).
  */
 interface AuthState {
   user: UserProfile | null
-  organization: Organization | null
   organizations: Organization[]
+  organization: Organization | null
+  status: 'loading' | 'authenticated' | 'unauthenticated'
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (fullName: string, email: string, password: string) => Promise<void>
-  signOut: () => void
+  /** Resolves null when registration succeeded but email confirmation is pending. */
+  signUp: (fullName: string, email: string, password: string) => Promise<SessionInfo | null>
+  signOut: () => Promise<void>
   switchOrganization: (orgId: string) => void
 }
 
 const AuthContext = createContext<AuthState | null>(null)
-const SESSION_KEY = 'atlas.session'
-
-function loadSession(): UserProfile | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as UserProfile
-  } catch {
-    return null
-  }
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(loadSession)
-  const [orgId, setOrgId] = useState<string>(currentUser.organizationId)
+  const { auth } = useAtlas()
+  const [session, setSession] = useState<SessionInfo | null>(null)
+  const [status, setStatus] = useState<AuthState['status']>('loading')
+  const [orgId, setOrgId] = useState<string | null>(null)
 
-  const signIn = useCallback(async (email: string, _password: string) => {
-    await new Promise((r) => setTimeout(r, 650))
-    const session: UserProfile = { ...currentUser, email: email || currentUser.email }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    setUser(session)
+  useEffect(() => {
+    let cancelled = false
+    auth
+      .getSession()
+      .then((loaded) => {
+        if (cancelled) return
+        if (loaded === null) {
+          setStatus('unauthenticated')
+        } else {
+          setSession(loaded)
+          setOrgId(loaded.user.organizationId)
+          setStatus('authenticated')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('unauthenticated')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [auth])
+
+  const adoptSession = useCallback((loaded: SessionInfo) => {
+    setSession(loaded)
+    setOrgId(loaded.user.organizationId)
+    setStatus('authenticated')
   }, [])
 
-  const signUp = useCallback(async (fullName: string, email: string, _password: string) => {
-    await new Promise((r) => setTimeout(r, 800))
-    const session: UserProfile = { ...currentUser, fullName, email }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    setUser(session)
-  }, [])
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const loaded = await auth.signIn({ email, password })
+      adoptSession(loaded)
+    },
+    [auth, adoptSession],
+  )
 
-  const signOut = useCallback(() => {
-    localStorage.removeItem(SESSION_KEY)
-    setUser(null)
-  }, [])
+  const signUp = useCallback(
+    async (fullName: string, email: string, password: string) => {
+      const loaded = await auth.signUp({ fullName, email, password })
+      if (loaded !== null) adoptSession(loaded)
+      return loaded
+    },
+    [auth, adoptSession],
+  )
+
+  const signOut = useCallback(async () => {
+    await auth.signOut()
+    setSession(null)
+    setStatus('unauthenticated')
+  }, [auth])
 
   const value = useMemo<AuthState>(
     () => ({
-      user,
-      organization: organizations.find((o) => o.id === orgId) ?? null,
-      organizations,
+      user: session?.user ?? null,
+      organizations: session?.organizations ?? [],
+      organization:
+        session?.organizations.find((org) => org.id === orgId) ??
+        session?.organizations[0] ??
+        null,
+      status,
       signIn,
       signUp,
       signOut,
       switchOrganization: setOrgId,
     }),
-    [user, orgId, signIn, signUp, signOut],
+    [session, orgId, status, signIn, signUp, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

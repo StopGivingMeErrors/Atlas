@@ -1,34 +1,68 @@
-export interface AuditEntry {
-  action: string
-  resourceType: string
-  resourceId: string
-  timestamp: string
-}
-
-const listeners = new Set<(entry: AuditEntry) => void>()
-const entries: AuditEntry[] = []
+import type { z } from 'zod'
+import type { AuditEvent } from '../types'
+import { listAuditEventsInputSchema, recordAuditInputSchema } from './schemas'
+import { ProviderNotConfiguredError } from './errors'
 
 /**
- * Client-side audit hook. In production every sensitive action is also
- * recorded server-side in audit_logs; this mirror powers the live
- * activity feed without waiting on the server round-trip.
+ * Audit service boundary.
+ *
+ * `record` persists a durable audit event server-side (audit_events) and
+ * additionally mirrors it into an in-process feed used for optimistic UI.
+ * `listEvents` reads the durable trail. Persistence failures are reported
+ * through the returned flag rather than thrown — a failed audit write must
+ * be visible to operators but must not corrupt the primary workflow.
  */
-export function recordAudit(action: string, resourceType: string, resourceId: string): void {
-  const entry: AuditEntry = {
-    action,
-    resourceType,
-    resourceId,
-    timestamp: new Date().toISOString(),
+export type RecordAuditInput = z.infer<typeof recordAuditInputSchema>
+export type ListAuditEventsInput = z.infer<typeof listAuditEventsInputSchema>
+
+export interface AuditService {
+  record(input: RecordAuditInput): Promise<{ persisted: boolean }>
+  listEvents(input?: ListAuditEventsInput): Promise<AuditEvent[]>
+}
+
+/* ---------- ephemeral in-process mirror (optimistic UI only) ---------- */
+
+type MirrorListener = (event: AuditEvent) => void
+
+const mirrorListeners = new Set<MirrorListener>()
+let mirrorSequence = 0
+
+/**
+ * Ephemeral, session-local mirror of audit activity. This is NOT the
+ * durable trail — durable events live in `audit_events` and are readable
+ * via `AuditService.listEvents`.
+ */
+export const ephemeralAuditMirror = {
+  append(input: RecordAuditInput, actor: string): AuditEvent {
+    mirrorSequence += 1
+    const event: AuditEvent = {
+      id: `mirror-${mirrorSequence}`,
+      organizationId: 'local',
+      actor,
+      action: input.action,
+      detail: input.detail,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId ?? null,
+      sensitive: input.sensitive,
+      timestamp: new Date().toISOString(),
+    }
+    mirrorListeners.forEach((fn) => fn(event))
+    return event
+  },
+  subscribe(fn: MirrorListener): () => void {
+    mirrorListeners.add(fn)
+    return () => {
+      mirrorListeners.delete(fn)
+    }
+  },
+}
+
+export class UnconfiguredAuditService implements AuditService {
+  async record(): Promise<{ persisted: boolean }> {
+    throw new ProviderNotConfiguredError('Audit')
   }
-  entries.push(entry)
-  listeners.forEach((fn) => fn(entry))
-}
 
-export function getAuditEntries(): readonly AuditEntry[] {
-  return entries
-}
-
-export function onAudit(fn: (entry: AuditEntry) => void): () => void {
-  listeners.add(fn)
-  return () => listeners.delete(fn)
+  async listEvents(): Promise<AuditEvent[]> {
+    throw new ProviderNotConfiguredError('Audit')
+  }
 }

@@ -1,20 +1,21 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { AtlasServiceError } from '../../services/errors'
 import { AuthLayout } from './AuthLayout'
-import { Button } from '../../components/ui/primitives'
+import { Button, Panel } from '../../components/ui/primitives'
 
 const inputClass =
   'h-9 w-full rounded-md border border-edge bg-surface-2 px-3 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent-dim'
 
 export function SignUp() {
   const { signUp } = useAuth()
-  const navigate = useNavigate()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingConfirmation, setPendingConfirmation] = useState(false)
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -25,11 +26,36 @@ export function SignUp() {
     setError(null)
     setLoading(true)
     try {
-      await signUp(fullName, email, password)
-      navigate('/investigations')
+      const session = await signUp(fullName, email, password)
+      if (session === null) setPendingConfirmation(true)
+    } catch (err) {
+      setError(
+        err instanceof AtlasServiceError
+          ? err.displayMessage
+          : 'Registration failed. Please try again.',
+      )
     } finally {
       setLoading(false)
     }
+  }
+
+  if (pendingConfirmation) {
+    return (
+      <AuthLayout>
+        <h2 className="text-lg font-semibold tracking-tight">Confirm your email</h2>
+        <Panel className="mt-5 p-4">
+          <p className="text-[13px] leading-relaxed text-ink-secondary">
+            Registration received. Confirm your email address, then wait for an
+            administrator to approve your membership before signing in.
+          </p>
+        </Panel>
+        <p className="mt-6 text-center text-xs text-ink-muted">
+          <Link to="/signin" className="text-accent transition-colors hover:text-ink">
+            Back to sign in
+          </Link>
+        </p>
+      </AuthLayout>
+    )
   }
 
   return (

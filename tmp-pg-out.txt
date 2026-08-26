@@ -1,0 +1,9 @@
+start
+initialising...
+starting...
+creating db...
+FAILED: pg.query is not a function
+TypeError: pg.query is not a function
+    at file:///C:/Users/User/Desktop/PROJECTS/PetDating/petdating/tmp-pg-smoke.mjs:21:22
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+stopped

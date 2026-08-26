@@ -1,0 +1,13 @@
+Cleaning up existing container...
+Starting PostgreSQL container...
+FAILED: Command failed: docker run -d --name atlas-test-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=atlas -p 5436:5432 postgres:16
+Error: Command failed: docker run -d --name atlas-test-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=atlas -p 5436:5432 postgres:16
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at checkExecSyncError (node:child_process:916:11)
+    at execSync (node:child_process:988:15)
+    at run (file:///C:/Users/User/Desktop/PROJECTS/PetDating/petdating/test-db-docker.mjs:25:5)
+    at file:///C:/Users/User/Desktop/PROJECTS/PetDating/petdating/test-db-docker.mjs:88:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)

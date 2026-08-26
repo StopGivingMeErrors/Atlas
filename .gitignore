@@ -11,6 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+
+# Embedded Postgres test clusters
+.pgdata*
+
+# Hosted E2E runner state (contains resolved credentials - never commit)
+e2e/.hosted-state.json
+e2e/.e2e-manifest.json
+test-results/
+playwright-report/
 
 # Editor directories and files
 .vscode/*

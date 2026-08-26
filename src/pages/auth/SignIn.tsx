@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { AtlasServiceError } from '../../services/errors'
 import { AuthLayout } from './AuthLayout'
 import { Button } from '../../components/ui/primitives'
 
@@ -26,6 +27,12 @@ export function SignIn() {
     try {
       await signIn(email, password)
       navigate('/investigations')
+    } catch (err) {
+      setError(
+        err instanceof AtlasServiceError
+          ? err.displayMessage
+          : 'Sign-in failed. Please try again.',
+      )
     } finally {
       setLoading(false)
     }
@@ -92,7 +99,7 @@ export function SignIn() {
         </Link>
       </p>
       <p className="mt-8 border-t border-edge pt-4 text-center text-[11px] leading-relaxed text-ink-faint">
-        Demo environment — any credentials sign you in as the seeded analyst.
+        Access requires an account provisioned by your organization administrator.
       </p>
     </AuthLayout>
   )
