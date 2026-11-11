@@ -6,7 +6,7 @@ const CONTAINER_NAME = 'atlas-test-db'
 const PORT = 5436
 const DB_NAME = 'atlas'
 const USER = 'postgres'
-const PASSWORD = 'pw'
+const PASSWORD = process.env.ATLAS_LOCAL_PG_PASSWORD ?? 'pw'
 
 const log = (m) => {
   console.log(m)

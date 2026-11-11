@@ -1,13 +1,15 @@
 import EmbeddedPostgres from 'embedded-postgres'
 import fs from 'node:fs'
 
+const PASSWORD = process.env.ATLAS_LOCAL_PG_PASSWORD ?? 'pw'
+
 const log = (m) => fs.appendFileSync('tmp-pg-out.txt', m + '\n')
 fs.writeFileSync('tmp-pg-out.txt', 'start\n')
 
 const pg = new EmbeddedPostgres({
   databaseDir: '.pgdata-smoke',
   user: 'postgres',
-  password: 'pw',
+  password: PASSWORD,
   port: 5434,
   persistent: false,
 })
