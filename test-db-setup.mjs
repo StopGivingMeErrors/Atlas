@@ -2,13 +2,15 @@ import EmbeddedPostgres from 'embedded-postgres'
 import { Client } from 'pg'
 import fs from 'node:fs'
 
+const PASSWORD = process.env.ATLAS_LOCAL_PG_PASSWORD ?? 'pw'
+
 const log = (m) => fs.appendFileSync('test-db-out.txt', m + '\n')
 fs.writeFileSync('test-db-out.txt', 'start\n')
 
 const pg = new EmbeddedPostgres({
   databaseDir: '.pgdata-test',
   user: 'postgres',
-  password: 'pw',
+  password: PASSWORD,
   port: 5435,
   persistent: false,
 })
@@ -29,7 +31,7 @@ async function run() {
       host: 'localhost',
       port: 5435,
       user: 'postgres',
-      password: 'pw',
+      password: PASSWORD,
       database: 'atlas',
     })
     await client.connect()
